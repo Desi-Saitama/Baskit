@@ -12,15 +12,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
+private val DarkColorScheme = lightColorScheme(
     primary = Purple50,
     onPrimary = Color.White,
     primaryContainer = Purple20,
     onPrimaryContainer = Purple80,
     secondary = Amber,
     onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF1C1408),
-    onSecondaryContainer = Amber,
+    secondaryContainer = Color(0xFFFFE9C7),
+    onSecondaryContainer = Color(0xFF4A2E0A),
     tertiary = Green,
     onTertiary = Color.Black,
     error = Red,
@@ -61,7 +61,9 @@ fun KharchaTrackerTheme(content: @Composable () -> Unit) {
             val window = (view.context as Activity).window
             window.statusBarColor = DarkBg.toArgb()
             window.navigationBarColor = DarkBg.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            // Light surfaces → use dark status-bar icons for contrast.
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = true
         }
     }
 

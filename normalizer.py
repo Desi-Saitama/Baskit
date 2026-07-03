@@ -309,6 +309,16 @@ def delete_alias(raw_name: str, raw_brand: str):
     conn.close()
 
 
+def delete_alias_by_id(alias_id: int) -> bool:
+    """Delete a single alias mapping by its primary key. Returns True if a row was removed."""
+    conn = _conn()
+    cur = conn.execute("DELETE FROM item_aliases WHERE id = ?", (alias_id,))
+    conn.commit()
+    deleted = cur.rowcount > 0
+    conn.close()
+    return deleted
+
+
 def get_all_aliases() -> list[dict]:
     try:
         conn = _conn()

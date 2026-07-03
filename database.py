@@ -101,6 +101,18 @@ def verify_user(username: str, password: str) -> bool:
     return _check(password, row["pw_hash"])
 
 
+def update_password(username: str, password: str) -> bool:
+    """Update the password hash for an existing user. Returns True if updated."""
+    conn = get_conn()
+    cur = conn.execute(
+        "UPDATE auth SET pw_hash = ? WHERE username = ?",
+        (_hash(password), username),
+    )
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
 def user_exists() -> bool:
     conn = get_conn()
     count = conn.execute("SELECT COUNT(*) FROM auth").fetchone()[0]

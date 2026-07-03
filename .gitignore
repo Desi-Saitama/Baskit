@@ -44,3 +44,9 @@ invoice/
 *.png
 *.gif
 *.webp
+
+# Web frontend (React / Vite)
+web/node_modules/
+web/dist/
+web/.vite/
+web/*.local

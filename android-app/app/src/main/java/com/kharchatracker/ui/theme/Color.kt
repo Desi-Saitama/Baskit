@@ -2,13 +2,15 @@ package com.kharchatracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ── Primary palette (matching web app's purple gradient) ─────────────────────
-val Purple80 = Color(0xFFD0BCFF)
-val Purple60 = Color(0xFFA78BFA)
-val Purple50 = Color(0xFF8B5CF6)
-val Purple40 = Color(0xFF6366F1)
-val Purple30 = Color(0xFF4F46E5)
-val Purple20 = Color(0xFF3730A3)
+// ── Primary palette (warm amber/orange — matches the React web theme) ─────────
+// Same NAMES as the previous purple palette so every screen/component that
+// references these constants picks up the warm theme automatically.
+val Purple80 = Color(0xFFFDE6C4)   // pale amber  (onPrimaryContainer)
+val Purple60 = Color(0xFFF59E0B)   // amber       (KPI accent / secondary)
+val Purple50 = Color(0xFFC05621)   // warm orange (primary — web --primary)
+val Purple40 = Color(0xFFD97706)   // deep amber  (KPI accent)
+val Purple30 = Color(0xFFB45309)   // darker amber
+val Purple20 = Color(0xFF7C2D12)   // deep brown-orange (primaryContainer)
 
 // ── Accent colors ────────────────────────────────────────────────────────────
 val Amber = Color(0xFFF59E0B)
@@ -19,14 +21,14 @@ val Pink = Color(0xFFEC4899)
 val Orange = Color(0xFFF97316)
 val Cyan = Color(0xFF06B6D4)
 
-// ── Surfaces (dark theme) ────────────────────────────────────────────────────
-val DarkBg = Color(0xFF0F172A)
-val DarkSurface = Color(0xFF1E293B)
-val DarkSurfaceVariant = Color(0xFF334155)
-val DarkCard = Color(0xFF1E293B)
-val TextPrimary = Color(0xFFE2E8F0)
-val TextSecondary = Color(0xFF94A3B8)
-val TextMuted = Color(0xFF64748B)
+// ── Surfaces (warm light theme) ──────────────────────────────────────────────
+val DarkBg = Color(0xFFFFF7EA)            // warm cream  (web --background)
+val DarkSurface = Color(0xFFFFFCF6)       // warm white  (cards / fields)
+val DarkSurfaceVariant = Color(0xFFEAD9C2)// warm tan    (borders / dividers)
+val DarkCard = Color(0xFFFFFCF6)          // warm white
+val TextPrimary = Color(0xFF332514)       // dark brown  (web --foreground)
+val TextSecondary = Color(0xFF806B52)     // warm grey   (web --muted-foreground)
+val TextMuted = Color(0xFFA89078)         // warmer muted
 
 // ── App brand colors ─────────────────────────────────────────────────────────
 object AppColors {
