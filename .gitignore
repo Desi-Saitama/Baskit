@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.eggs/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Android & Gradle
+.gradle/
+.kotlin/
+build/
+**/build/
+*.iml
+local.properties
+
+# Application Data & Database
+data/tracker.db
+data/key_usage.json
+data/processed_files.json
+data/logs/
+
+# Custom Tools / Scratch
+.kilo/
+
+# Invoices & Images
+invoice/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp

@@ -1,0 +1,19 @@
+[project]
+name = "invoice-tracker"
+version = "0.1.0"
+description = "Private invoice & expense tracker for Indian delivery apps"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.35.0",
+    "google-genai>=1.0.0",
+    "pillow>=10.0.0",
+    "pdfplumber>=0.11.0",
+    "pandas>=2.0.0",
+    "plotly>=5.20.0",
+    "python-dotenv>=1.0.0",
+    "bcrypt>=4.1.0",
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.9",
+]

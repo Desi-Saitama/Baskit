@@ -1,0 +1,111 @@
+/* ── Kharcha Tracker — Global Styles ── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Root overrides ─────────────────────────────────────────────────────── */
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* Dark background */
+.stApp {
+    background: #0f172a !important;
+    color: #e2e8f0 !important;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #1e293b !important;
+    border-right: 1px solid #334155 !important;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: transform 0.15s, box-shadow 0.15s !important;
+}
+
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4) !important;
+}
+
+.stButton > button[kind="secondary"] {
+    background: #1e293b !important;
+    color: #cbd5e1 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 8px !important;
+}
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+.stTextInput > div > div > input,
+.stNumberInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > div {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px !important;
+}
+
+/* ── Expander ──────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    border-radius: 10px !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* ── Dataframe ─────────────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+
+/* ── Metrics ─────────────────────────────────────────────────────────────*/
+[data-testid="stMetric"] {
+    background: #1e293b !important;
+    border-radius: 10px !important;
+    padding: 1rem !important;
+    border-top: 3px solid #6366f1 !important;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────────────*/
+hr {
+    border-color: #334155 !important;
+}
+
+/* ── Form ─────────────────────────────────────────────────────────────── */
+[data-testid="stForm"] {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    border-radius: 12px !important;
+    padding: 1.5rem !important;
+}
+
+/* ── File uploader ──────────────────────────────────────────────────────*/
+[data-testid="stFileUploader"] {
+    background: #1e293b !important;
+    border: 2px dashed #334155 !important;
+    border-radius: 12px !important;
+}
+
+/* ── Alert / Info boxes ─────────────────────────────────────────────────*/
+.stAlert {
+    border-radius: 10px !important;
+}
+
+/* ── Plotly charts ──────────────────────────────────────────────────────*/
+.js-plotly-plot {
+    border-radius: 12px !important;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────*/
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #6366f1; }

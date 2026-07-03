@@ -1,0 +1,175 @@
+# Design and Code Generation Request: Kharcha Tracker Frontend Revamp
+
+We are replacing our current Streamlit web app and Jetpack Compose Android app frontends with a modern, high-end, responsive stack.
+- **Web App Stack**: FastAPI backend rendering HTML pages via Jinja2 templates, styled with Tailwind CSS v3, and interactive charting using Chart.js or ApexCharts (pure client-side JavaScript).
+- **Mobile Companion App Stack**: Redesigned in a matching modern style. It can either be a mobile-optimized responsive web interface or a Jetpack Compose companion app updated to match the new web aesthetics.
+
+---
+
+## 1. Project Overview & Functionality
+
+"Kharcha Tracker" is a private, self-hosted expense tracker specifically built for Indian delivery/quick-commerce apps: **Zepto, Blinkit, Instamart, BigBasket, JioMart, Swiggy, and Zomato**.
+
+### Key Workflows:
+1. **Invoice & Screenshot Upload**: Users upload single/multiple screenshots or PDF invoices. An AI engine (using Gemini Vision via Google GenAI SDK) parses the image, extracts order date, order ID, items, unit prices, brands, categories, total paid, delivery fees, and discounts.
+2. **Review & Save**: Users review the AI-extracted fields and line items, make any corrections, and commit the order to a local SQLite database.
+3. **Bulk Processing**: Users point the tracker to a local directory. It scans for invoice files, checks which ones are already imported (using a resume cache), and processes the pending files sequentially using a rotating pool of Gemini API keys (up to 4 keys to bypass daily free tier limits) and rate-limit compliance.
+4. **Fuzzy Item Normalization & Aliasing**: OCR data from screenshots is noisy and item names vary (e.g., "Coca-Cola Can 300ml" vs "Coke Can 300 ml"). The tracker groups near-duplicate items (similarity threshold >= 72%) and category conflicts. The user can merge these variants under a single "Canonical Name", "Canonical Brand", and "Canonical Category", which are saved as mappings to clean up all charts and reports without altering the raw receipt data.
+5. **Analytics Dashboard**: Rich visualization of user spending, savings, delivery fees, price trends, item frequencies, and auto-generated cost-saving tips.
+6. **Authentication & Multi-platform Sync**: Simple single-user authentication (password-gated). Both the web app and the mobile app sync in real-time by writing to and reading from the same shared SQLite database.
+
+---
+
+## 2. Database Schema (SQLite Metadata)
+
+The SQLite database (`data/tracker.db`) contains the following tables:
+
+### Table: `auth` (Single-user login credentials)
+- `id`: INTEGER PRIMARY KEY
+- `username`: TEXT NOT NULL UNIQUE (Default: "admin")
+- `pw_hash`: TEXT NOT NULL (Bcrypt hash)
+
+### Table: `orders` (Individual transaction details)
+- `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+- `order_date`: TEXT NOT NULL (ISO date `YYYY-MM-DD`)
+- `app_name`: TEXT NOT NULL (e.g., "zepto", "blinkit", "instamart", "bigbasket", "jiomart", "swiggy", "zomato")
+- `app_category`: TEXT NOT NULL (e.g., "groceries", "food", "both")
+- `order_id`: TEXT (Unique receipt identifier from delivery platform)
+- `total_amount`: REAL NOT NULL DEFAULT 0 (Total amount billed/paid)
+- `delivery_fee`: REAL NOT NULL DEFAULT 0 (Delivery fee paid)
+- `discount`: REAL NOT NULL DEFAULT 0 (Discounts/promo savings)
+- `notes`: TEXT (Metadata or custom note, e.g., `[bulk import] filename.pdf`)
+- `created_at`: TEXT NOT NULL DEFAULT (Current timestamp)
+
+### Table: `items` (Line items for each order)
+- `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+- `order_id`: INTEGER NOT NULL REFERENCES `orders`(`id`) ON DELETE CASCADE
+- `name`: TEXT NOT NULL (Item name)
+- `brand`: TEXT (Brand name)
+- `category`: TEXT (Item category)
+- `quantity`: TEXT (Quantity, e.g., "1 unit", "500g", "2 pieces")
+- `unit_price`: REAL NOT NULL DEFAULT 0
+- `total_price`: REAL NOT NULL DEFAULT 0
+
+### Table: `item_aliases` (Canonical merge mappings for cleaning duplicate data)
+- `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+- `raw_name`: TEXT NOT NULL (Original text from invoice)
+- `raw_brand`: TEXT NOT NULL DEFAULT '' (Original brand)
+- `canonical_name`: TEXT NOT NULL (Standard clean name to display in reports)
+- `canonical_brand`: TEXT NOT NULL DEFAULT '' (Standard brand name)
+- `canonical_cat`: TEXT NOT NULL DEFAULT '' (Standard category name)
+- `created_at`: TEXT NOT NULL DEFAULT (Current timestamp)
+*Unique Constraint/Index*: `idx_item_aliases_raw` on `lower(raw_name), lower(raw_brand)`
+
+---
+
+## 3. Data Currently Displayed & Screen Layouts
+
+The new UI must render all the following metrics, views, and pages:
+
+### Page 1: 📊 Dashboard
+Displays spending statistics and interactive visualizations:
+- **KPI Metrics Cards (Grid)**:
+  1. **Today**: Current day's total spend (₹)
+  2. **This Week**: Current week's total spend (₹)
+  3. **This Month**: Current month's total spend (₹)
+  4. **All Time**: Overall cumulative spend (₹)
+  5. **Total Saved**: Overall discounts applied (₹)
+  6. **Total Orders**: Total number of successful orders (Count)
+  7. **Avg Order**: Average cost per order (₹)
+  8. **Delivery Fees**: Cumulative delivery/convenience charges (₹)
+- **Charts Grid**:
+  - **Spending Over Time**: Selectable filters for Daily (last 30 days), Weekly (last 12 weeks), or Monthly (last 12 months). Renders a Bar chart of spend plus a line overlay showing the 3-period moving average.
+  - **Pizza vs Cart Split**: A pie/donut chart representing Food vs Groceries share (grouped by order `app_category`).
+  - **Spend by Category**: Horizontal bar chart showing the sum of item prices across 13 standard categories (Fruits & Vegetables, Dairy & Eggs, Grains & Pulses, Snacks, Beverages, Personal Care, Household, Bakery, Spices & Condiments, Ready to Eat, Restaurant Food, Meat & Seafood, Other).
+  - **Daily Spend Heatmap**: A calendar grid/density map showing daily spending amounts over the last 30 days.
+
+### Page 2: 📱 App-Wise Analysis & Item Intelligence
+- **App Breakdown Cards**: Grid of cards for each active platform (Zepto, Blinkit, etc.) displaying:
+  - Total Orders, Total Spent, Total Saved, Avg Order, and Net Discount Rate (Saved / (Spent + Saved) %).
+- **App Compare Charts**:
+  - Spend vs Delivery Fees (Grouped bar chart)
+  - Spend Share by App (Donut chart)
+  - Savings vs Delivery Fees (Grouped bar chart showing total discount side-by-side with delivery fees)
+  - Items per App table (App Name, Unique Items count, Total Items count, Avg Unit Price, Total Item Spend)
+- **Item Intelligence Section**:
+  - **Frequent Purchases**: Horizontal bar chart showing top purchased items, filterable by category and a slider for limit (Top 5 to 50).
+  - **Detailed Frequency Table**: Columns for Item Name, Brand, Category, Times Ordered, Average Price, Price Range (Min–Max), and Cumulative Spent.
+  - **Top Spend Items**: Bar chart showing items with the highest cumulative expenditure.
+  - **Frequency vs Spend Bubble Chart**: Scatter plot where X-axis = Times Ordered, Y-axis = Total Spent, and Bubble size = Avg Unit Price.
+  - **Category Treemap**: Nested box layout representing expenses by category and item.
+  - **Searchable Item Directory**: Filterable table showing Date, App, Item, Brand, Category, Qty, Unit Price, and Total.
+
+### Page 3: 💡 Savings, Insights & Trends
+- **Cost Reduction Recommendations**: Smart highlight cards with color-coded tags:
+  - *Consolidation alert*: Identifies which app has the highest spend and suggests grouping orders.
+  - *Discounts alert*: Highlights the app offering the best discount rates.
+  - *Delivery fee alert*: Identifies if subscription services (e.g., Zepto Pass, Blinkit One, Swiggy One) would save money based on total delivery fees paid.
+  - *Price variance alert*: Highlights items showing significant price fluctuations (identifying minimum and maximum observed unit prices).
+- **Price Trend Chart**: Dropdown to select a frequently purchased item, rendering a Line chart showing unit price changes over time, with a horizontal dashed line indicating the average price.
+- **Orders History Log (Log Table)**: Chronological list of orders containing columns: Date, App, App Category/Type, Order ID, Amount Paid, Delivery Fee, Discount, Notes. Clicking on a row should expand to show:
+  - Table of items inside the order.
+  - Buttons to **Delete** (with warning dialog) or **Edit** (which opens an inline form to modify any field and add/edit/delete line items).
+
+### Page 4: 📤 Upload & Parse View
+- **App Configuration**: Checkbox to toggle auto-detect. If turned off, shows grid selector buttons for the 7 delivery apps (Zepto, Blinkit, Instamart, BigBasket, JioMart, Swiggy, Zomato).
+- **File Dropzone**: Upload area accepting multiple images (JPG, PNG) and/or PDF files, displaying thumbnails and file states.
+- **Review & Edit Form**: Triggered after Gemini AI parses the file. Shows editable fields:
+  - Order Date, Order ID, App, App Category, Total Paid, Delivery Fee, Discount, Notes.
+  - Interactive item list where each line item is editable: Item Name, Brand, Category (13 option dropdown), Qty, Unit Price, Total Price.
+  - Action button: **Save Order** (saves to database after running duplicate checks).
+
+### Page 5: 📂 Bulk Import Console
+- **Source Configuration**: Directory text field with a "Browse" folder selection modal.
+- **Folder Scan Dashboard**: Shows a scan summary before running (Done items vs Pending items list using local database JSON logs).
+- **Control Center**: Toggles for recursive directories, auto-save (bypasses review step), and actions (Start, Cancel, Reset).
+- **Live Output Log**: A scrolling terminal console displaying live logs ("✅ Parsed invoice_1.pdf", "⏭️ Skipped duplicate order_102", "❌ Failed: invoice_3.jpg - rate limit").
+- **Review Queue**: If auto-save is off, displays a stack of cards for each parsed file. Users review, edit, and click "Save" or "Discard" to dequeue.
+
+### Page 6: 🧹 Data Cleanup Interface
+- **Suspected Duplicates Editor**: Expander groups showing clustered items with similarity scores >= 72%. Displays tables of raw variations, and fields to specify the unified Canonical Name, Canonical Brand, and Canonical Category to map them all to.
+- **Fix Categories Workspace**: Lists items grouped as "Other" or having conflicting categories, allowing the user to select the correct category from a dropdown.
+- **Saved Mappings View**: List of all item aliases in a filterable table, with a quick-delete action to un-merge mappings.
+
+### Page 7: ⚙️ Settings & Key Pool
+- **Gemini Key Pool Monitor**: Visual meter cards for each of the 4 key slots showing: Key ID (suffix), Usage Count today out of 20, and status flags (Active, Standby, or Exhausted).
+- **Credentials Manager**: Forms to update configured keys (masked) and update admin passwords.
+- **CSV Exporter**: Quick-download buttons for `orders.csv` and `items.csv`.
+
+---
+
+## 4. API Documentation (REST endpoints from `api_server.py`)
+
+Your frontend logic should consume the following FastAPI endpoints:
+
+1. **POST** `/api/auth/login` -> Request: `{username, password}`, Response: `{access_token, token_type}` (JWT authentication)
+2. **GET** `/api/orders` -> Query params: `skip`, `limit`, `app_name`, `search`. Response: `{orders: [Order], total, skip, limit}`
+3. **GET** `/api/orders/{id}` -> Response: `{order: Order, items: [OrderItem]}`
+4. **POST** `/api/orders` -> Request: `{order_date, app_name, app_category, order_id, total_amount, delivery_fee, discount, notes, items: [OrderItem]}` (Creates new order)
+5. **PUT** `/api/orders/{id}` -> Request: `OrderUpdate` payload (Updates order and drops/re-inserts items)
+6. **DELETE** `/api/orders/{id}` -> Response: `{message}` (Deletes order)
+7. **POST** `/api/upload/parse` -> Multipart request with `file` and optional `app_name`. Response: `{parsed: ParsedOrder}`
+8. **POST** `/api/upload/save` -> Request: `ParsedOrderSave` payload with a `skip_duplicate_check` boolean. Response: `{id, message}`
+9. **GET** `/api/stats/summary` -> Response: `{today_spend, week_spend, month_spend, total_spend, total_saved, total_fees, total_orders, avg_order}`
+10. **GET** `/api/stats/by-app` -> Response: `{apps: [{app_name, orders, total_spent, total_saved, total_fees, avg_order}]}`
+11. **GET** `/api/stats/by-category` -> Response: `{categories: [{category, item_count, total_spent, avg_price}]}`
+12. **GET** `/api/stats/recent-orders` -> Query: `limit`. Response: `{orders: [Order]}`
+13. **GET** `/api/health` -> Response: `{status: "ok", app, version}`
+
+---
+
+## 5. UI/UX Redesign Guidelines (FastAPI + Jinja2 + Tailwind 3)
+
+1. **Visual Style**:
+   - Modern, sleek dark mode dashboard. Use a rich palette of deep slate, indigo accents, and brand colors matching Indian platforms (e.g., Zepto Purple `#8b5cf6`, Blinkit Yellow `#f59e0b`, Swiggy Orange `#ea580c`, Zomato Red `#ef4444`).
+   - Use premium glassmorphic cards (`backdrop-filter: blur()`), subtle box shadows, and smooth hover micro-animations.
+   - Clean, readable typography (e.g., Inter, Outfit, or Roboto).
+2. **Dashboard Layout**:
+   - Left-sidebar dashboard navigation.
+   - High-impact KPI grid at the top with sparklines.
+   - Seamless grids for charts that resize gracefully on mobile browsers.
+3. **Forms & Review Tables**:
+   - Forms should have real-time inline validation, clear placeholder inputs, and interactive category selection icons.
+   - Excel-style or Airtable-style grid inputs for invoice line-item reviews, allowing quick keyboard navigation or row deletions.
+4. **Mobile Design (Companion App or Web App)**:
+   - Ensure the layouts are 100% mobile-responsive, utilizing collapsible drawers, tabbed views, floating action buttons (FAB) for instant screenshot capture/upload, and card layouts instead of wide tables.

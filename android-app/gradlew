@@ -1,0 +1,47 @@
+#!/bin/sh
+
+#
+# Gradle wrapper script for Linux/macOS
+#
+
+# Determine the project base directory
+APP_BASE_NAME=$(basename "$0")
+APP_HOME=$(cd "$(dirname "$0")" && pwd -P)
+
+# Add default JVM options here
+DEFAULT_JVM_OPTS="-Xmx2048m -Xms256m"
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD=maximum
+
+# Increase the maximum file descriptors if we can.
+if ! command -v ulimit >/dev/null 2>&1; then
+    :
+elif [ "$MAX_FD" = "maximum" ] || [ "$MAX_FD" = "max" ]; then
+    MAX_FD_LIMIT=$(ulimit -H -n) || MAX_FD_LIMIT=
+    if [ -n "$MAX_FD_LIMIT" ]; then
+        ulimit -n "$MAX_FD_LIMIT" 2>/dev/null || :
+    fi
+fi
+
+# Resolve JAVA_HOME
+if [ -n "$JAVA_HOME" ]; then
+    JAVACMD="$JAVA_HOME/bin/java"
+else
+    JAVACMD="java"
+fi
+
+if ! command -v "$JAVACMD" >/dev/null 2>&1; then
+    echo "ERROR: JAVA_HOME is not set and 'java' command not found in PATH."
+    exit 1
+fi
+
+CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+
+exec "$JAVACMD" \
+    $DEFAULT_JVM_OPTS \
+    $JAVA_OPTS \
+    $GRADLE_OPTS \
+    -classpath "$CLASSPATH" \
+    org.gradle.wrapper.GradleWrapperMain \
+    "$@"
