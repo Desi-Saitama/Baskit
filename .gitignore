@@ -37,10 +37,27 @@ data/logs/
 # Custom Tools / Scratch
 .kilo/
 
-# Invoices & Images
+# Invoices & Images (uploaded receipts — never commit)
 invoice/
 *.jpg
 *.jpeg
 *.png
 *.gif
 *.webp
+# ...but keep app source image assets tracked (Android launcher icon, web images)
+!android-app/**/*.png
+!android-app/**/*.jpg
+!android-app/**/*.jpeg
+!android-app/**/*.gif
+!android-app/**/*.webp
+!web/**/*.png
+!web/**/*.jpg
+!web/**/*.jpeg
+!web/**/*.gif
+!web/**/*.webp
+
+# Web frontend build artifacts (deps + build output)
+web/node_modules/
+web/dist/
+web/.vite/
+web/*.local
