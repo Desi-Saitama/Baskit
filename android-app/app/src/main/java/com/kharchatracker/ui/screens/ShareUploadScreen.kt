@@ -31,9 +31,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kharchatracker.data.api.ApiClient
+import com.kharchatracker.data.cache.OfflineCache
 import com.kharchatracker.data.model.*
 import com.kharchatracker.ui.theme.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -53,6 +56,7 @@ fun ShareUploadScreen(
 ) {
     val context = LocalContext.current
     val apiClient = remember { ApiClient.getInstance(context) }
+    val offlineCache = remember { OfflineCache(context) }
     val scope = rememberCoroutineScope()
 
     // State
@@ -103,10 +107,11 @@ fun ShareUploadScreen(
             parseError = null
             try {
                 val service = apiClient.getService()
-                val inputStream = context.contentResolver.openInputStream(uri)
-                    ?: throw Exception("Cannot read file")
-                val bytes = inputStream.readBytes()
-                inputStream.close()
+                val bytes = withContext(Dispatchers.IO) {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                        ?: throw Exception("Cannot read file")
+                    inputStream.use { it.readBytes() }
+                }
 
                 val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
                 val fileName = selectedFileName ?: "file"
@@ -180,6 +185,12 @@ fun ShareUploadScreen(
 
                 val response = service.saveParsedOrder(saveRequest)
                 if (response.isSuccessful) {
+                    runCatching {
+                        val ordersResponse = service.getOrders(limit = 500)
+                        if (ordersResponse.isSuccessful) {
+                            offlineCache.saveOrders(ordersResponse.body()?.orders ?: emptyList())
+                        }
+                    }
                     saveSuccess = true
                     // Reset
                     selectedUri = null

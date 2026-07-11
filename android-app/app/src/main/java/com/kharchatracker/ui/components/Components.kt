@@ -1,6 +1,7 @@
 package com.kharchatracker.ui.components
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,50 +34,57 @@ fun KpiCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp),
-        shape = RoundedCornerShape(14.dp),
+            .height(112.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
+            containerColor = DarkSurface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        border = BorderStroke(1.dp, DarkSurfaceVariant.copy(alpha = 0.65f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            accentColor.copy(alpha = 0.15f),
-                            DarkBg.copy(alpha = 0.95f)
-                        ),
-                        start = Offset(0f, 0f),
-                        end = Offset(300f, 300f)
-                    )
-                )
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
+                .padding(14.dp),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(icon, fontSize = 24.sp)
-                Spacer(modifier = Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = value,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentColor,
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(accentColor)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = label.uppercase(),
-                    fontSize = 9.sp,
-                    color = TextSecondary,
-                    letterSpacing = 0.5.sp,
-                    fontWeight = FontWeight.Medium
+                    text = value,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(accentColor.copy(alpha = 0.16f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.68f)
+                        .fillMaxHeight()
+                        .background(accentColor)
                 )
             }
         }

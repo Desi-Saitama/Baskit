@@ -22,12 +22,13 @@ import com.kharchatracker.ui.theme.*
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     data object Dashboard : Screen("dashboard", "Dashboard", Icons.Outlined.Dashboard, Icons.Filled.Dashboard)
+    data object AppsItems : Screen("apps-items", "Apps", Icons.Outlined.Analytics, Icons.Filled.Analytics)
     data object History : Screen("history", "History", Icons.Outlined.Receipt, Icons.Filled.Receipt)
     data object Upload : Screen("upload", "Upload", Icons.Outlined.AddCircleOutline, Icons.Filled.AddCircle)
     data object Settings : Screen("settings", "Settings", Icons.Outlined.Settings, Icons.Filled.Settings)
 }
 
-val bottomNavItems = listOf(Screen.Dashboard, Screen.History, Screen.Upload, Screen.Settings)
+val bottomNavItems = listOf(Screen.Dashboard, Screen.AppsItems, Screen.History, Screen.Upload, Screen.Settings)
 
 @Composable
 fun MainNavigation(
@@ -101,6 +102,9 @@ fun MainNavigation(
             }
             composable(Screen.History.route) {
                 HistoryScreen()
+            }
+            composable(Screen.AppsItems.route) {
+                AppsItemsScreen()
             }
             composable(Screen.Upload.route) {
                 ShareUploadScreen(

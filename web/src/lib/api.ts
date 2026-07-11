@@ -1,5 +1,5 @@
 /**
- * api.ts — API client for Kharcha Tracker FastAPI backend.
+ * api.ts — API client for Baskit FastAPI backend.
  * Uses fetch() with JWT bearer token auth.
  */
 
@@ -117,6 +117,36 @@ export interface SpendPoint {
   avg: number;
 }
 
+export interface MonthlyStat {
+  month: string;
+  label: string;
+  total_spend: number;
+  total_saved: number;
+  total_fees: number;
+  total_orders: number;
+  avg_order: number;
+  is_current_month: boolean;
+}
+
+export interface MonthlyStatsResponse {
+  current_month: MonthlyStat;
+  previous_month: MonthlyStat;
+  comparison: {
+    spend_delta: number;
+    spend_delta_percent: number | null;
+    orders_delta: number;
+    avg_order_delta: number;
+  };
+  months: MonthlyStat[];
+}
+
+export interface AvailableMonth {
+  month: string;
+  label: string;
+  total_orders: number;
+  total_spend: number;
+}
+
 export interface HeatmapPoint {
   date: string;
   amount: number;
@@ -150,12 +180,18 @@ export async function getSummary(): Promise<StatsSummary> {
   return request('/api/stats/summary');
 }
 
-export async function getStatsByApp(): Promise<{ apps: AppStat[] }> {
-  return request('/api/stats/by-app');
+export async function getStatsByApp(month?: string): Promise<{ apps: AppStat[] }> {
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  return request(`/api/stats/by-app${query}`);
 }
 
-export async function getStatsByCategory(): Promise<{ categories: CategoryStat[] }> {
-  return request('/api/stats/by-category');
+export async function getStatsByCategory(month?: string): Promise<{ categories: CategoryStat[] }> {
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  return request(`/api/stats/by-category${query}`);
+}
+
+export async function getAvailableMonths(): Promise<{ months: AvailableMonth[] }> {
+  return request('/api/stats/available-months');
 }
 
 export async function getRecentOrders(limit = 5): Promise<{ orders: Order[] }> {
@@ -166,18 +202,27 @@ export async function getSpendingOverTime(period = 'weekly'): Promise<{ data: Sp
   return request(`/api/stats/spending-over-time?period=${period}`);
 }
 
+export async function getMonthlyStats(months = 12, populatedOnly = false): Promise<MonthlyStatsResponse> {
+  const params = new URLSearchParams({ months: String(months) });
+  if (populatedOnly) params.set('populated_only', 'true');
+  return request(`/api/stats/monthly?${params}`);
+}
+
 export async function getDailyHeatmap(): Promise<{ data: HeatmapPoint[] }> {
   return request('/api/stats/daily-heatmap');
 }
 
-export async function getItemFrequency(limit = 20, category?: string): Promise<{ items: ItemFrequency[] }> {
+export async function getItemFrequency(limit = 20, category?: string, month?: string): Promise<{ items: ItemFrequency[] }> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (category) params.set('category', category);
+  if (month) params.set('month', month);
   return request(`/api/stats/item-frequency?${params}`);
 }
 
-export async function getTopItems(limit = 10): Promise<{ items: ItemFrequency[] }> {
-  return request(`/api/stats/top-items?limit=${limit}`);
+export async function getTopItems(limit = 10, month?: string): Promise<{ items: ItemFrequency[] }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (month) params.set('month', month);
+  return request(`/api/stats/top-items?${params}`);
 }
 
 export async function getPriceTrend(itemName: string): Promise<{ data: PriceTrendPoint[] }> {

@@ -59,13 +59,33 @@ interface ApiService {
     suspend fun getSummary(): Response<StatsSummary>
 
     @GET("api/stats/by-app")
-    suspend fun getStatsByApp(): Response<AppStatsResponse>
+    suspend fun getStatsByApp(@Query("month") month: String? = null): Response<AppStatsResponse>
 
     @GET("api/stats/by-category")
     suspend fun getStatsByCategory(): Response<CategoryStatsResponse>
 
     @GET("api/stats/recent-orders")
     suspend fun getRecentOrders(@Query("limit") limit: Int = 5): Response<OrdersResponse>
+
+    @GET("api/stats/monthly")
+    suspend fun getMonthlyStats(
+        @Query("months") months: Int = 12,
+        @Query("populated_only") populatedOnly: Boolean = false
+    ): Response<MonthlyStatsResponse>
+
+    @GET("api/stats/available-months")
+    suspend fun getAvailableMonths(): Response<AvailableMonthsResponse>
+
+    @GET("api/stats/item-frequency")
+    suspend fun getItemFrequency(
+        @Query("limit") limit: Int = 50,
+        @Query("month") month: String? = null
+    ): Response<ItemFrequencyResponse>
+
+    // ── Settings ────────────────────────────────────────────────────────────
+
+    @GET("api/settings/key-pool")
+    suspend fun getKeyPoolStatus(): Response<KeyPoolResponse>
 
     // ── Health ────────────────────────────────────────────────────────────────
 

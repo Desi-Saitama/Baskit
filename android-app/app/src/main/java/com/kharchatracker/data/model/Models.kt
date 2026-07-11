@@ -120,6 +120,17 @@ data class AppStatsResponse(
     val apps: List<AppStat>
 )
 
+data class AvailableMonth(
+    val month: String,
+    val label: String,
+    @SerializedName("total_orders") val totalOrders: Int,
+    @SerializedName("total_spend") val totalSpend: Double
+)
+
+data class AvailableMonthsResponse(
+    val months: List<AvailableMonth>
+)
+
 data class CategoryStat(
     val category: String,
     @SerializedName("item_count") val itemCount: Int,
@@ -129,6 +140,60 @@ data class CategoryStat(
 
 data class CategoryStatsResponse(
     val categories: List<CategoryStat>
+)
+
+data class MonthlyStat(
+    val month: String,
+    val label: String,
+    @SerializedName("total_spend") val totalSpend: Double,
+    @SerializedName("total_saved") val totalSaved: Double,
+    @SerializedName("total_fees") val totalFees: Double,
+    @SerializedName("total_orders") val totalOrders: Int,
+    @SerializedName("avg_order") val avgOrder: Double,
+    @SerializedName("is_current_month") val isCurrentMonth: Boolean
+)
+
+data class MonthlyComparison(
+    @SerializedName("spend_delta") val spendDelta: Double,
+    @SerializedName("spend_delta_percent") val spendDeltaPercent: Double?,
+    @SerializedName("orders_delta") val ordersDelta: Int,
+    @SerializedName("avg_order_delta") val avgOrderDelta: Double
+)
+
+data class MonthlyStatsResponse(
+    @SerializedName("current_month") val currentMonth: MonthlyStat,
+    @SerializedName("previous_month") val previousMonth: MonthlyStat,
+    val comparison: MonthlyComparison,
+    val months: List<MonthlyStat>
+)
+
+data class ItemFrequency(
+    val name: String,
+    val brand: String = "",
+    val category: String = "",
+    val times: Int,
+    @SerializedName("avg_price") val avgPrice: Double,
+    @SerializedName("min_price") val minPrice: Double,
+    @SerializedName("max_price") val maxPrice: Double,
+    @SerializedName("total_spent") val totalSpent: Double
+)
+
+data class ItemFrequencyResponse(
+    val items: List<ItemFrequency>
+)
+
+// ── Settings ────────────────────────────────────────────────────────────────
+
+data class KeyPoolStatus(
+    val index: Int,
+    val suffix: String,
+    val count: Int,
+    val exhausted: Boolean,
+    val active: Boolean
+)
+
+data class KeyPoolResponse(
+    val keys: List<KeyPoolStatus>
 )
 
 // ── Parse ────────────────────────────────────────────────────────────────────

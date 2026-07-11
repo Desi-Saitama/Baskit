@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Dashboard from '@/pages/Dashboard';
 import AppsItems from '@/pages/AppsItems';
+import History from '@/pages/History';
 import Savings from '@/pages/Savings';
 import Upload from '@/pages/Upload';
 import BulkImport from '@/pages/BulkImport';
@@ -45,6 +46,7 @@ export default function App() {
 
         {page === 'Dashboard' && <Dashboard />}
         {page === 'Apps & Items' && <AppsItems />}
+        {page === 'History' && <History />}
         {page === 'Savings' && <Savings />}
         {page === 'Upload' && <Upload />}
         {page === 'Bulk Import' && <BulkImport />}

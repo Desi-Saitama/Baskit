@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { ReceiptText } from 'lucide-react';
 import { login, register, saveToken } from '@/lib/api';
 
 interface LoginProps {
@@ -50,10 +49,12 @@ export default function Login({ onLogin }: LoginProps) {
 
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
-          <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-gradient-to-br from-orange-500 to-amber-400 text-white shadow-xl shadow-orange-300/40">
-            <ReceiptText className="size-8" />
-          </div>
-          <h1 className="text-3xl font-extrabold text-stone-900 font-heading">Kharcha Tracker</h1>
+          <img
+              src="/baskit-logo.png"
+              alt="Baskit"
+              className="mx-auto mb-4 size-20 rounded-3xl object-cover shadow-xl shadow-orange-300/30"
+            />
+          <h1 className="text-3xl font-extrabold text-stone-900 font-heading">Baskit</h1>
           <p className="mt-1 text-sm text-stone-500">Your private expense tracker for Indian delivery apps</p>
         </div>
 

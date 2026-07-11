@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kharchatracker.data.api.ApiClient
+import com.kharchatracker.data.cache.OfflineCache
+import com.kharchatracker.data.model.KeyPoolStatus
 import com.kharchatracker.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -24,15 +26,39 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val apiClient = remember { ApiClient.getInstance(context) }
+    val offlineCache = remember { OfflineCache(context) }
     val scope = rememberCoroutineScope()
 
     var serverUrl by remember { mutableStateOf("") }
     var isTestingConnection by remember { mutableStateOf(false) }
     var connectionStatus by remember { mutableStateOf<String?>(null) }
     var connectionOk by remember { mutableStateOf<Boolean?>(null) }
+    var keyUsage by remember { mutableStateOf<List<KeyPoolStatus>>(emptyList()) }
+    var isLoadingKeyUsage by remember { mutableStateOf(true) }
+    var keyUsageError by remember { mutableStateOf<String?>(null) }
+
+    fun loadKeyUsage() {
+        scope.launch {
+            isLoadingKeyUsage = true
+            keyUsageError = null
+            try {
+                val response = apiClient.getService().getKeyPoolStatus()
+                if (response.isSuccessful) {
+                    keyUsage = response.body()?.keys ?: emptyList()
+                } else {
+                    throw Exception("Server returned ${response.code()}")
+                }
+            } catch (e: Exception) {
+                keyUsageError = "Could not load API usage: ${e.message}"
+            } finally {
+                isLoadingKeyUsage = false
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         serverUrl = apiClient.getServerUrl()
+        loadKeyUsage()
     }
 
     Column(
@@ -163,6 +189,77 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // ── Gemini API usage ─────────────────────────────────────────────
+        Card(
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Key, "Gemini API usage", tint = Amber)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Gemini API Usage",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { loadKeyUsage() }, enabled = !isLoadingKeyUsage) {
+                        Icon(Icons.Default.Refresh, "Refresh API usage", tint = Purple50)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                when {
+                    isLoadingKeyUsage -> CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Purple50
+                    )
+                    keyUsageError != null -> Text(
+                        keyUsageError.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Red
+                    )
+                    keyUsage.isEmpty() -> Text(
+                        "No Gemini API keys are configured on this server.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    else -> keyUsage.forEach { key ->
+                        val status = when {
+                            key.exhausted -> "Exhausted"
+                            key.active -> "Active"
+                            else -> "Ready"
+                        }
+                        val statusColor = when {
+                            key.exhausted -> Red
+                            key.active -> Green
+                            else -> Amber
+                        }
+                        Text(
+                            "Key ${key.index} · ${key.suffix} · ${key.count}/20 used today · $status",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = statusColor,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                        LinearProgressIndicator(
+                            progress = { key.count.coerceAtMost(20) / 20f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            color = statusColor,
+                            trackColor = DarkSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // ── About ────────────────────────────────────────────────────────
         Card(
             colors = CardDefaults.cardColors(containerColor = DarkSurface),
@@ -182,7 +279,7 @@ fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text("🛒 Kharcha Tracker", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Purple50)
+                Text("🛒 Baskit", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Purple50)
                 Text("v1.0.0 • Android Companion App", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -219,7 +316,7 @@ fun SettingsScreen(
                 val steps = listOf(
                     "Open your invoice in any app (WhatsApp, Email, Files)",
                     "Tap the Share button",
-                    "Select \"Kharcha Tracker\" from the share menu",
+                    "Select \"Baskit\" from the share menu",
                     "The app will parse the bill using AI",
                     "Review the extracted data and tap Save"
                 )
@@ -249,6 +346,7 @@ fun SettingsScreen(
             onClick = {
                 scope.launch {
                     apiClient.clearToken()
+                    offlineCache.clearAll()
                     onLogout()
                 }
             },

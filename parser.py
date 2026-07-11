@@ -7,6 +7,7 @@ import io
 import json
 import re
 import os
+from collections.abc import Callable
 import pdfplumber
 from PIL import Image
 from google import genai
@@ -135,8 +136,8 @@ Rules:
 """
 
 
-def _get_client() -> genai.Client:
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+def _get_client(api_key: str | None = None) -> genai.Client:
+    api_key = api_key or os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise ValueError("GEMINI_API_KEY not set. Please add it in Settings.")
     return genai.Client(api_key=api_key)
@@ -172,10 +173,15 @@ def _annotate_detected_app(data: dict, app_name: str | None, filename: str = "",
     return data
 
 
-def parse_images(image_bytes_list: list[bytes], app_name: str | None = None,
-                 filename: str = "") -> dict:
+def parse_images(
+    image_bytes_list: list[bytes],
+    app_name: str | None = None,
+    filename: str = "",
+    api_key: str | None = None,
+    on_request: Callable[[], None] | None = None,
+) -> dict:
     """Parse one or more screenshot images (bytes) for a single order."""
-    client = _get_client()
+    client = _get_client(api_key)
 
     if app_name:
         app_line = f"App: {app_name.upper()}\n\n"
@@ -200,18 +206,29 @@ def parse_images(image_bytes_list: list[bytes], app_name: str | None = None,
             types.Part.from_bytes(data=buf.getvalue(), mime_type="image/png")
         )
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=parts,
-    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=parts,
+        )
+    finally:
+        # This callback runs only after the SDK has attempted the outbound
+        # Gemini request, so malformed local files are not counted.
+        if on_request:
+            on_request()
     data = _extract_json(response.text)
     return _annotate_detected_app(data, app_name, filename)
 
 
-def parse_pdf(pdf_bytes: bytes, app_name: str | None = None,
-              filename: str = "") -> dict:
+def parse_pdf(
+    pdf_bytes: bytes,
+    app_name: str | None = None,
+    filename: str = "",
+    api_key: str | None = None,
+    on_request: Callable[[], None] | None = None,
+) -> dict:
     """Extract text from PDF via pdfplumber, then send to Gemini."""
-    client = _get_client()
+    client = _get_client(api_key)
 
     text_pages = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
@@ -238,10 +255,14 @@ def parse_pdf(pdf_bytes: bytes, app_name: str | None = None,
         f"Invoice text extracted from PDF:\n\n{full_text}"
     )
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+    finally:
+        if on_request:
+            on_request()
     data = _extract_json(response.text)
     return _annotate_detected_app(data, detected or app_name, filename, full_text)
 
@@ -251,14 +272,16 @@ def parse_mixed(
     pdf_bytes_list: list[bytes],
     app_name: str | None = None,
     pdf_filename: str = "",
+    api_key: str | None = None,
+    on_request: Callable[[], None] | None = None,
 ) -> dict:
     """
     Parse a combination of screenshots + PDFs for a single order.
     Prefers PDF if available (more structured), supplements with screenshots.
     """
     if pdf_bytes_list:
-        result = parse_pdf(pdf_bytes_list[0], app_name, pdf_filename)
+        result = parse_pdf(pdf_bytes_list[0], app_name, pdf_filename, api_key, on_request)
         if image_bytes_list and (not result.get("items")):
-            result = parse_images(image_bytes_list, app_name, pdf_filename)
+            result = parse_images(image_bytes_list, app_name, pdf_filename, api_key, on_request)
         return result
-    return parse_images(image_bytes_list, app_name, pdf_filename)
+    return parse_images(image_bytes_list, app_name, pdf_filename, api_key, on_request)

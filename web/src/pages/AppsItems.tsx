@@ -6,8 +6,8 @@ import { Search } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Card from '@/components/layout/Card';
 import {
-  getStatsByApp, getItemFrequency, getTopItems, getItemsPerApp,
-  type AppStat, type ItemFrequency,
+  getStatsByApp, getItemFrequency, getTopItems, getAvailableMonths,
+  type AppStat, type ItemFrequency, type AvailableMonth,
 } from '@/lib/api';
 import { rupees, appColor } from '@/lib/utils';
 
@@ -20,16 +20,31 @@ export default function AppsItems() {
   const [apps, setApps] = useState<AppStat[]>([]);
   const [items, setItems] = useState<ItemFrequency[]>([]);
   const [topItems, setTopItems] = useState<ItemFrequency[]>([]);
+  const [months, setMonths] = useState<AvailableMonth[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.allSettled([
-      getStatsByApp().then(r => setApps(r.apps)),
-      getItemFrequency(20).then(r => setItems(r.items)).catch(() => {}),
-      getTopItems(10).then(r => setTopItems(r.items)).catch(() => {}),
-    ]).finally(() => setLoading(false));
+    getAvailableMonths()
+      .then(r => {
+        setMonths(r.months);
+        setSelectedMonth(r.months[0]?.month ?? '');
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedMonth && months.length > 0) return;
+    Promise.allSettled([
+      getStatsByApp(selectedMonth || undefined).then(r => setApps(r.apps)),
+      getItemFrequency(50, undefined, selectedMonth || undefined).then(r => setItems(r.items)),
+      getTopItems(10, selectedMonth || undefined).then(r => setTopItems(r.items)),
+    ]);
+  }, [selectedMonth, months.length]);
+
+  const selectedMonthLabel = months.find(m => m.month === selectedMonth)?.label ?? 'All recorded data';
 
   const pie = apps.map(a => ({
     name: a.app_name, value: a.total_spent, color: appColor(a.app_name),
@@ -49,7 +64,23 @@ export default function AppsItems() {
       <Header
         title="App-wise analysis & item intelligence"
         subtitle="Compare Zepto, Blinkit, Instamart, BigBasket, JioMart, Swiggy and Zomato, then drill into recurring items."
+        actions={
+          <label className="flex items-center gap-2 rounded-full bg-white/60 px-3 py-2 text-sm text-stone-700">
+            <span>Month</span>
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              disabled={months.length === 0}
+              className="bg-transparent font-semibold outline-none"
+            >
+              {months.length === 0 && <option>All recorded data</option>}
+              {months.map(month => <option key={month.month} value={month.month}>{month.label}</option>)}
+            </select>
+          </label>
+        }
       />
+
+      <p className="mb-4 text-sm text-stone-500">Showing app and item activity for <b className="text-stone-800">{selectedMonthLabel}</b>.</p>
 
       {/* App cards */}
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -90,10 +121,28 @@ export default function AppsItems() {
         <Card className="animate-fade-in delay-3">
           <b className="text-stone-900">Frequent purchases</b>
           {topItems.length > 0 ? (
-            <ResponsiveContainer width="100%" height={290}>
-              <BarChart layout="vertical" data={topItems.slice(0, 8)}>
+            <ResponsiveContainer width="100%" height={Math.max(290, topItems.slice(0, 8).length * 55)}>
+              <BarChart layout="vertical" data={topItems.slice(0, 8)} margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
                 <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={140} stroke="#9a7b5b" fontSize={12} />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  width={170}
+                  stroke="#9a7b5b"
+                  fontSize={12}
+                  tick={(props: any) => {
+                    const { x, y, payload } = props;
+                    const label = payload.value.length > 22
+                      ? payload.value.slice(0, 20) + '…'
+                      : payload.value;
+                    return (
+                      <text x={x} y={y} dy={4} textAnchor="end" fill="#9a7b5b" fontSize={12}>
+                        {label}
+                      </text>
+                    );
+                  }}
+                  interval={0}
+                />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="times" fill="#f59e0b" radius={8} />
               </BarChart>

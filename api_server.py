@@ -1,8 +1,8 @@
 """
-api_server.py — FastAPI REST server for the Kharcha Tracker Android companion app.
+api_server.py — FastAPI REST server for the Kharcha Tracker apps.
 
-Shares the same SQLite database as the Streamlit web app, so all changes
-sync automatically between platforms.
+The React web app and Android companion app share the same SQLite database
+through this API, so all changes sync automatically between platforms.
 
 Run with:
     uv run uvicorn api_server:app --host 0.0.0.0 --port 8000 --reload
@@ -12,6 +12,7 @@ import os
 import io
 import csv
 import tempfile
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -43,7 +44,7 @@ from normalizer import (
     delete_alias_by_id,
     CANONICAL_CATEGORY_ORDER,
 )
-from key_pool import ApiKeyPool
+from key_pool import ApiKeyPool, AllKeysExhaustedException
 
 # Initialise DB and normalizer tables
 init_db()
@@ -206,6 +207,10 @@ def list_orders(
     _user: str = Depends(get_current_user),
 ):
     """List orders with pagination and optional filters."""
+    skip = max(skip, 0)
+    # Android's existing History screen requests 500 rows, so keep that
+    # established contract while still bounding untrusted query values.
+    limit = min(max(limit, 1), 500)
     conn = get_conn()
     query = """
         SELECT id, order_date, app_name, app_category, order_id,
@@ -219,14 +224,16 @@ def list_orders(
         query += " AND app_name = ?"
         params.append(app_name)
     if search:
-        query += " AND (order_id LIKE ? OR notes LIKE ?)"
-        params.extend([f"%{search}%", f"%{search}%"])
+        query += " AND (app_name LIKE ? OR order_id LIKE ? OR notes LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+    count_query = f"SELECT COUNT(*) FROM ({query})"
+    total = conn.execute(count_query, params).fetchone()[0]
 
     query += " ORDER BY order_date DESC, created_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, skip])
 
     rows = conn.execute(query, params).fetchall()
-    total = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
     conn.close()
 
     orders = []
@@ -358,6 +365,32 @@ def remove_order(order_db_id: int, _user: str = Depends(get_current_user)):
 #  UPLOAD / PARSE ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _is_quota_error(error: Exception) -> bool:
+    """Identify Gemini quota errors without coupling the API to SDK internals."""
+    message = str(error).lower()
+    return any(marker in message for marker in ("429", "resource_exhausted", "quota", "rate limit"))
+
+
+def _parse_with_key_pool(parse_func, *args, **kwargs) -> dict:
+    """Run one parse with the persisted key pool and retry only quota failures."""
+    pool = ApiKeyPool()
+    while True:
+        key = pool.current_key()
+        try:
+            return parse_func(
+                *args,
+                **kwargs,
+                api_key=key,
+                on_request=lambda request_key=key: pool.record_request(request_key),
+            )
+        except Exception as exc:
+            if not _is_quota_error(exc):
+                raise
+            try:
+                pool.mark_exhausted(key)
+            except AllKeysExhaustedException as exhausted:
+                raise exhausted from exc
+
 @app.post("/api/upload/parse")
 async def parse_upload(
     file: UploadFile = File(...),
@@ -374,9 +407,9 @@ async def parse_upload(
 
     try:
         if "pdf" in content_type or filename.lower().endswith(".pdf"):
-            data = parse_pdf(content, app_name=app_name, filename=filename)
+            data = _parse_with_key_pool(parse_pdf, content, app_name=app_name, filename=filename)
         elif any(content_type.startswith(t) for t in ["image/", "application/octet-stream"]):
-            data = parse_images([content], app_name=app_name, filename=filename)
+            data = _parse_with_key_pool(parse_images, [content], app_name=app_name, filename=filename)
         else:
             raise HTTPException(
                 status_code=400,
@@ -384,6 +417,8 @@ async def parse_upload(
             )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except AllKeysExhaustedException as e:
+        raise HTTPException(status_code=429, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
 
@@ -425,6 +460,48 @@ def save_parsed(order: ParsedOrderSave, _user: str = Depends(get_current_user)):
 #  STATS / DASHBOARD ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _validated_month(month: Optional[str]) -> Optional[str]:
+    """Return a safe YYYY-MM filter or reject malformed client input."""
+    if month is None or not month.strip():
+        return None
+    month = month.strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=422, detail="month must use YYYY-MM")
+    try:
+        datetime.strptime(month, "%Y-%m")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="month must use YYYY-MM") from exc
+    return month
+
+
+@app.get("/api/stats/available-months")
+def get_available_months(_user: str = Depends(get_current_user)):
+    """Recorded months only, newest first, for month pickers in both clients."""
+    conn = get_conn()
+    rows = conn.execute(
+        """
+        SELECT strftime('%Y-%m', order_date) AS month,
+               COUNT(*) AS total_orders,
+               COALESCE(SUM(total_amount), 0) AS total_spend
+        FROM orders
+        GROUP BY month
+        HAVING month IS NOT NULL
+        ORDER BY month DESC
+        """
+    ).fetchall()
+    conn.close()
+    return {
+        "months": [
+            {
+                "month": r["month"],
+                "label": datetime.strptime(r["month"], "%Y-%m").strftime("%b %Y"),
+                "total_orders": int(r["total_orders"] or 0),
+                "total_spend": round(float(r["total_spend"] or 0), 2),
+            }
+            for r in rows
+        ]
+    }
+
 @app.get("/api/stats/summary")
 def get_summary(_user: str = Depends(get_current_user)):
     """Dashboard KPI data."""
@@ -464,10 +541,12 @@ def get_summary(_user: str = Depends(get_current_user)):
 
 
 @app.get("/api/stats/by-app")
-def get_stats_by_app(_user: str = Depends(get_current_user)):
+def get_stats_by_app(month: Optional[str] = None, _user: str = Depends(get_current_user)):
     """Per-app spending breakdown."""
+    month = _validated_month(month)
     conn = get_conn()
-    rows = conn.execute("""
+    where = "WHERE strftime('%Y-%m', order_date) = ?" if month else ""
+    rows = conn.execute(f"""
         SELECT app_name,
                COUNT(*) as orders,
                SUM(total_amount) as total_spent,
@@ -475,9 +554,10 @@ def get_stats_by_app(_user: str = Depends(get_current_user)):
                SUM(delivery_fee) as total_fees,
                AVG(total_amount) as avg_order
         FROM orders
+        {where}
         GROUP BY app_name
         ORDER BY total_spent DESC
-    """).fetchall()
+    """, (month,) if month else ()).fetchall()
     conn.close()
 
     return {
@@ -496,19 +576,22 @@ def get_stats_by_app(_user: str = Depends(get_current_user)):
 
 
 @app.get("/api/stats/by-category")
-def get_stats_by_category(_user: str = Depends(get_current_user)):
+def get_stats_by_category(month: Optional[str] = None, _user: str = Depends(get_current_user)):
     """Per-category item spending breakdown."""
+    month = _validated_month(month)
     conn = get_conn()
-    rows = conn.execute("""
+    where = "WHERE strftime('%Y-%m', o.order_date) = ?" if month else ""
+    rows = conn.execute(f"""
         SELECT i.category,
                COUNT(*) as item_count,
                SUM(i.total_price) as total_spent,
                AVG(i.unit_price) as avg_price
         FROM items i
         JOIN orders o ON i.order_id = o.id
+        {where}
         GROUP BY i.category
         ORDER BY total_spent DESC
-    """).fetchall()
+    """, (month,) if month else ()).fetchall()
     conn.close()
 
     return {
@@ -555,6 +638,84 @@ def get_recent_orders(limit: int = 5, _user: str = Depends(get_current_user)):
     }
 
 
+def _shift_month(month_start: datetime, delta_months: int) -> datetime:
+    month_index = month_start.month - 1 + delta_months
+    year = month_start.year + month_index // 12
+    month = month_index % 12 + 1
+    return month_start.replace(year=year, month=month, day=1)
+
+
+@app.get("/api/stats/monthly")
+def get_monthly_stats(months: int = 12, populated_only: bool = False, _user: str = Depends(get_current_user)):
+    """Month-wise spend plus current-vs-previous-month comparison."""
+    months = max(2, min(months, 24))
+    now = datetime.now()
+    current_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    first_month = _shift_month(current_month, -(months - 1))
+
+    conn = get_conn()
+    rows = conn.execute(
+        """
+        SELECT strftime('%Y-%m', order_date) AS month,
+               COALESCE(SUM(total_amount), 0) AS total_spend,
+               COALESCE(SUM(discount), 0) AS total_saved,
+               COALESCE(SUM(delivery_fee), 0) AS total_fees,
+               COUNT(*) AS total_orders,
+               COALESCE(AVG(total_amount), 0) AS avg_order
+        FROM orders
+        WHERE order_date >= ?
+        GROUP BY month
+        ORDER BY month
+        """,
+        (first_month.strftime("%Y-%m-%d"),),
+    ).fetchall()
+    conn.close()
+
+    by_month = {r["month"]: r for r in rows if r["month"]}
+    month_rows = []
+    for i in range(months):
+        month_date = _shift_month(first_month, i)
+        month_key = month_date.strftime("%Y-%m")
+        row = by_month.get(month_key)
+        total_spend = float(row["total_spend"] or 0) if row else 0.0
+        total_orders = int(row["total_orders"] or 0) if row else 0
+        month_rows.append({
+            "month": month_key,
+            "label": month_date.strftime("%b %Y"),
+            "total_spend": round(total_spend, 2),
+            "total_saved": round(float(row["total_saved"] or 0), 2) if row else 0,
+            "total_fees": round(float(row["total_fees"] or 0), 2) if row else 0,
+            "total_orders": total_orders,
+            "avg_order": round(float(row["avg_order"] or 0), 2) if row else 0,
+            "is_current_month": month_key == current_month.strftime("%Y-%m"),
+        })
+
+    current = month_rows[-1]
+    previous = month_rows[-2]
+    spend_delta = current["total_spend"] - previous["total_spend"]
+    spend_delta_percent = (
+        (spend_delta / previous["total_spend"]) * 100
+        if previous["total_spend"] > 0
+        else None
+    )
+
+    # Legacy callers retain a continuous zero-filled range. New dashboards opt
+    # into populated_only so an empty month never appears in a customer's list.
+    visible_months = [m for m in month_rows if m["total_orders"] > 0] if populated_only else month_rows
+
+    return {
+        "current_month": current,
+        "previous_month": previous,
+        "comparison": {
+            "spend_delta": round(spend_delta, 2),
+            "spend_delta_percent": round(spend_delta_percent, 2) if spend_delta_percent is not None else None,
+            "orders_delta": current["total_orders"] - previous["total_orders"],
+            "avg_order_delta": round(current["avg_order"] - previous["avg_order"], 2),
+        },
+        "months": visible_months,
+    }
+
+
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/api/health")
 def health_check():
@@ -566,7 +727,12 @@ def health_check():
 #  These are ADDITIVE — existing endpoints and the DB schema are untouched.
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _item_frequency_rows(limit: int = 20, category: Optional[str] = None, sort_by: str = "times") -> list[dict]:
+def _item_frequency_rows(
+    limit: int = 20,
+    category: Optional[str] = None,
+    sort_by: str = "times",
+    month: Optional[str] = None,
+) -> list[dict]:
     """Shared helper: normalised item frequency / price-range stats."""
     df = get_items_df()
     if df is None or df.empty:
@@ -577,6 +743,8 @@ def _item_frequency_rows(limit: int = 20, category: Optional[str] = None, sort_b
             df[col] = df[col].fillna("")
     if category:
         df = df[df["category"] == category]
+    if month:
+        df = df[df["order_date"].astype(str).str.startswith(f"{month}-")]
     if df.empty:
         return []
 
@@ -668,15 +836,15 @@ def stats_spending_over_time(period: str = "weekly", _user: str = Depends(get_cu
 
 
 @app.get("/api/stats/item-frequency")
-def stats_item_frequency(limit: int = 20, category: Optional[str] = None, _user: str = Depends(get_current_user)):
+def stats_item_frequency(limit: int = 20, category: Optional[str] = None, month: Optional[str] = None, _user: str = Depends(get_current_user)):
     """Item frequency, avg/min/max price and total spent (normalised)."""
-    return {"items": _item_frequency_rows(limit=limit, category=category, sort_by="times")}
+    return {"items": _item_frequency_rows(limit=limit, category=category, sort_by="times", month=_validated_month(month))}
 
 
 @app.get("/api/stats/top-items")
-def stats_top_items(limit: int = 10, _user: str = Depends(get_current_user)):
+def stats_top_items(limit: int = 10, month: Optional[str] = None, _user: str = Depends(get_current_user)):
     """Top items by total spend amount (normalised)."""
-    return {"items": _item_frequency_rows(limit=limit, sort_by="total_spent")}
+    return {"items": _item_frequency_rows(limit=limit, sort_by="total_spent", month=_validated_month(month))}
 
 
 @app.get("/api/stats/daily-heatmap")
@@ -916,6 +1084,10 @@ def settings_key_pool(_user: str = Depends(get_current_user)):
     try:
         pool = ApiKeyPool()
         return {"keys": pool.all_usage()}
+    except AllKeysExhaustedException:
+        # The dashboard should continue showing the day's recorded usage and
+        # exhausted state instead of looking like no keys were configured.
+        return {"keys": ApiKeyPool.usage_snapshot()}
     except Exception:
         # No keys configured (or pool not initialised) — return empty list.
         return {"keys": []}

@@ -9,9 +9,9 @@ import Card from '@/components/layout/Card';
 import MiniBar from '@/components/charts/MiniBar';
 import {
   getSummary, getStatsByApp, getStatsByCategory,
-  getSpendingOverTime, getDailyHeatmap,
+  getSpendingOverTime, getDailyHeatmap, getMonthlyStats, getAvailableMonths,
   type StatsSummary, type AppStat, type CategoryStat,
-  type SpendPoint, type HeatmapPoint, healthCheck,
+  type SpendPoint, type HeatmapPoint, type MonthlyStatsResponse, type AvailableMonth, healthCheck,
 } from '@/lib/api';
 import { rupees } from '@/lib/utils';
 
@@ -29,6 +29,9 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<CategoryStat[]>([]);
   const [spend, setSpend] = useState<SpendPoint[]>([]);
   const [heatmap, setHeatmap] = useState<HeatmapPoint[]>([]);
+  const [monthly, setMonthly] = useState<MonthlyStatsResponse | null>(null);
+  const [availableMonths, setAvailableMonths] = useState<AvailableMonth[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [period, setPeriod] = useState<'weekly' | 'daily' | 'monthly'>('weekly');
   const [loading, setLoading] = useState(true);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
@@ -40,6 +43,11 @@ export default function Dashboard() {
       getStatsByCategory().then(r => setCategories(r.categories)),
       getSpendingOverTime(period).then(r => setSpend(r.data)).catch(() => setSpend([])),
       getDailyHeatmap().then(r => setHeatmap(r.data)).catch(() => setHeatmap([])),
+      getMonthlyStats(24, true).then(setMonthly).catch(() => setMonthly(null)),
+      getAvailableMonths().then(r => {
+        setAvailableMonths(r.months);
+        setSelectedMonth(r.months[0]?.month ?? '');
+      }).catch(() => {}),
       healthCheck().then(() => setApiOk(true)).catch(() => setApiOk(false)),
     ]).finally(() => setLoading(false));
   }, []);
@@ -47,6 +55,16 @@ export default function Dashboard() {
   useEffect(() => {
     getSpendingOverTime(period).then(r => setSpend(r.data)).catch(() => {});
   }, [period]);
+
+  useEffect(() => {
+    if (!selectedMonth) return;
+    Promise.all([
+      getStatsByApp(selectedMonth).then(r => setApps(r.apps)),
+      getStatsByCategory(selectedMonth).then(r => setCategories(r.categories)),
+    ]).catch(() => {});
+  }, [selectedMonth]);
+
+  const selectedMonthLabel = availableMonths.find(m => m.month === selectedMonth)?.label ?? 'All time';
 
   const pie = useMemo(
     () => apps.map(a => ({
@@ -71,6 +89,14 @@ export default function Dashboard() {
     { label: 'Delivery Fees', value: rupees(summary.total_fees), color: '#ea580c' },
   ] : [];
 
+  const comparisonText = monthly?.comparison.spend_delta_percent == null
+    ? 'No last-month baseline yet'
+    : `${monthly.comparison.spend_delta_percent >= 0 ? '+' : ''}${monthly.comparison.spend_delta_percent.toFixed(1)}% vs last month`;
+  const comparisonTone = (monthly?.comparison.spend_delta ?? 0) <= 0
+    ? 'text-emerald-700 bg-emerald-100'
+    : 'text-orange-800 bg-orange-100';
+  const maxMonthlySpend = Math.max(...(monthly?.months.map(m => m.total_spend) ?? [0]), 1);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -87,10 +113,22 @@ export default function Dashboard() {
   return (
     <>
       <Header
-        title="Command centre for every kharcha"
+        title="Baskit — Your Spend Command Centre"
         subtitle="Upload receipts, normalize noisy OCR items, and watch delivery app spending patterns across groceries and food."
         actions={
           <>
+            <label className="flex items-center gap-2 rounded-full bg-white/60 px-3 py-2 text-sm text-stone-700">
+              <span className="hidden sm:inline">Month</span>
+              <select
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                disabled={availableMonths.length === 0}
+                className="bg-transparent font-semibold outline-none"
+              >
+                {availableMonths.length === 0 && <option>All recorded data</option>}
+                {availableMonths.map(month => <option key={month.month} value={month.month}>{month.label}</option>)}
+              </select>
+            </label>
             <button className="rounded-full bg-white/60 px-4 py-2 text-sm text-stone-900 hover:bg-amber-100 transition">
               {apiOk === true ? '✅' : apiOk === false ? '❌' : '⏳'} /api/health {apiOk === true ? 'ok' : apiOk === false ? 'error' : '...'}
             </button>
@@ -111,6 +149,93 @@ export default function Dashboard() {
           </Card>
         ))}
       </section>
+
+      {monthly && (
+        <section className="mt-4 grid gap-4 xl:grid-cols-3">
+          <Card className="xl:col-span-2 animate-fade-in delay-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <b className="text-stone-900">Monthly expense separation</b>
+                <p className="mt-1 text-sm text-stone-500">Only months with recorded orders are shown. {selectedMonthLabel} filters the app and category views below.</p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${comparisonTone}`}>
+                {comparisonText}
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={monthly.months}>
+                <CartesianGrid stroke="rgba(141,92,45,.16)" />
+                <XAxis dataKey="label" stroke="#9a7b5b" fontSize={12} />
+                <YAxis stroke="#9a7b5b" fontSize={12} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value) => rupees(Number(value ?? 0))}
+                />
+                <Bar dataKey="total_spend" fill="#c05621" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card className="animate-fade-in delay-3">
+            <b className="text-stone-900">This month vs last month</b>
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-xl bg-white/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-stone-500">This month</p>
+                <div className="mt-1 flex items-end justify-between gap-3">
+                  <b className="text-2xl text-stone-900">{rupees(monthly.current_month.total_spend)}</b>
+                  <span className="text-sm text-stone-500">{monthly.current_month.total_orders} orders</span>
+                </div>
+                <p className="mt-1 text-xs text-stone-500">Avg {rupees(monthly.current_month.avg_order)} per order</p>
+              </div>
+              <div className="rounded-xl bg-white/60 p-4">
+                <p className="text-xs uppercase tracking-wide text-stone-500">Last month</p>
+                <div className="mt-1 flex items-end justify-between gap-3">
+                  <b className="text-2xl text-stone-900">{rupees(monthly.previous_month.total_spend)}</b>
+                  <span className="text-sm text-stone-500">{monthly.previous_month.total_orders} orders</span>
+                </div>
+                <p className="mt-1 text-xs text-stone-500">Avg {rupees(monthly.previous_month.avg_order)} per order</p>
+              </div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-4">
+                <p className="text-sm text-stone-600">Difference</p>
+                <b className="mt-1 block text-xl text-stone-900">
+                  {monthly.comparison.spend_delta >= 0 ? '+' : ''}{rupees(monthly.comparison.spend_delta)}
+                </b>
+                <p className="mt-1 text-xs text-stone-500">
+                  {monthly.comparison.orders_delta >= 0 ? '+' : ''}{monthly.comparison.orders_delta} orders,
+                  {' '}avg order {monthly.comparison.avg_order_delta >= 0 ? '+' : ''}{rupees(monthly.comparison.avg_order_delta)}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="xl:col-span-3 animate-fade-in delay-4">
+            <b className="text-stone-900">Month-wise expense list</b>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {monthly.months.slice().reverse().map(m => (
+                <div key={m.month} className="rounded-xl bg-white/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <b className="text-sm text-stone-900">{m.label}</b>
+                      <p className="text-xs text-stone-500">{m.total_orders} orders</p>
+                    </div>
+                    <b className="text-lg text-orange-800">{rupees(m.total_spend)}</b>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-amber-100">
+                    <div
+                      className="h-full rounded-full bg-orange-700"
+                      style={{ width: `${Math.max((m.total_spend / maxMonthlySpend) * 100, m.total_spend > 0 ? 6 : 0)}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-between text-xs text-stone-500">
+                    <span>Saved {rupees(m.total_saved)}</span>
+                    <span>Fees {rupees(m.total_fees)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* Charts row */}
       <section className="mt-4 grid gap-4 xl:grid-cols-3">
@@ -148,7 +273,7 @@ export default function Dashboard() {
 
         {/* App share pie */}
         <Card className="animate-fade-in delay-4">
-          <b className="text-stone-900">App spend share</b>
+          <b className="text-stone-900">App spend share · {selectedMonthLabel}</b>
           {pie.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -183,7 +308,7 @@ export default function Dashboard() {
 
         {/* Category bar */}
         <Card className="animate-fade-in delay-5">
-          <b className="text-stone-900">Spend by category</b>
+          <b className="text-stone-900">Spend by category · {selectedMonthLabel}</b>
           {categories.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart layout="vertical" data={categories.slice(0, 8)}>

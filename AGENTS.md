@@ -18,5 +18,7 @@
 - **Python Dependencies**: managed via `uv` / `pyproject.toml`
 
 ## Architecture Notes
+- FastAPI (`api_server.py`) is the single backend for both active clients: React web (`web/`) and Android (`android-app/`).
 - The FastAPI server exposes the original Android endpoints plus the extended `/api/stats/*`, `/api/cleanup/*`, `/api/settings/*`, `/api/export/*`, and `/api/auth/register` endpoints used by the React frontend.
 - The React app authenticates via JWT (`/api/auth/login` + `/api/auth/register`); the token is stored in `localStorage` under `kharcha_token`.
+- Streamlit is no longer the active frontend. Do not add or update Streamlit pages for new product work unless explicitly requested for migration/archival support.

@@ -9,20 +9,13 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(true);
+  const [keyPoolError, setKeyPoolError] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     getKeyPoolStatus()
       .then(r => setKeys(r.keys))
-      .catch(() => {
-        // Fallback demo data
-        setKeys([
-          { index: 1, suffix: '…A91F', count: 12, exhausted: false, active: true },
-          { index: 2, suffix: '…B20C', count: 19, exhausted: false, active: false },
-          { index: 3, suffix: '…C77D', count: 20, exhausted: true, active: false },
-          { index: 4, suffix: '…D39E', count: 7, exhausted: false, active: false },
-        ]);
-      })
+      .catch((e: Error) => setKeyPoolError(e.message || 'Could not load key usage.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -101,6 +94,16 @@ export default function SettingsPage() {
             </div>
           </Card>
         ))}
+        {!keys.length && !keyPoolError && (
+          <Card className="md:col-span-2 xl:col-span-4 text-sm text-stone-500">
+            No Gemini API keys are configured on this server.
+          </Card>
+        )}
+        {keyPoolError && (
+          <Card className="md:col-span-2 xl:col-span-4 text-sm text-red-700">
+            {keyPoolError}
+          </Card>
+        )}
       </section>
 
       <section className="mt-4 grid gap-4 xl:grid-cols-2">

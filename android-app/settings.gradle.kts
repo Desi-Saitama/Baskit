@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "KharchaTracker"
+rootProject.name = "Baskit"
 include(":app")

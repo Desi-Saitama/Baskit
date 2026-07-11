@@ -82,7 +82,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Kharcha Tracker",
+                text = "Baskit",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Purple50,

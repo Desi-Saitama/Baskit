@@ -15,16 +15,21 @@ from __future__ import annotations
 
 import json
 import os
-import time
 import logging
+import threading
 from pathlib import Path
-from datetime import date
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
 DAILY_LIMIT          = 20              # Gemini free-tier daily cap
 USAGE_FILE           = Path(__file__).parent / "data" / "key_usage.json"
-TODAY_STR            = str(date.today())   # recalculated at import; fine for a day's run
+_USAGE_LOCK = threading.Lock()
+
+
+def _today_str() -> str:
+    """UTC date used to scope Gemini's daily usage counters."""
+    return str(datetime.now(timezone.utc).date())
 
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
@@ -44,15 +49,19 @@ def _load_usage() -> dict:
     except Exception:
         return {}
     # If the saved date is not today, start fresh
-    if data.get("date") != TODAY_STR:
+    if data.get("date") != _today_str():
         return {}
     return data
 
 
 def _save_usage(data: dict):
     USAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    data["date"] = TODAY_STR
-    USAGE_FILE.write_text(json.dumps(data, indent=2))
+    data["date"] = _today_str()
+    # Write-and-replace means a restart can never observe a partially-written
+    # usage file.
+    temp_file = USAGE_FILE.with_suffix(".tmp")
+    temp_file.write_text(json.dumps(data, indent=2))
+    temp_file.replace(USAGE_FILE)
 
 
 # ── Key pool ───────────────────────────────────────────────────────────────────
@@ -133,15 +142,22 @@ class ApiKeyPool:
 
     def _increment(self, key: str):
         kid = self._key_id(key)
-        entry = self._usage.setdefault(kid, {"count": 0, "exhausted": False})
-        entry["count"] = entry.get("count", 0) + 1
-        _save_usage(self._usage)
+        # Reload while holding a process-local lock so parallel requests do not
+        # overwrite each other's counts. The persisted JSON is the source of
+        # truth, not this instance's in-memory dictionary.
+        with _USAGE_LOCK:
+            self._usage = _load_usage()
+            entry = self._usage.setdefault(kid, {"count": 0, "exhausted": False})
+            entry["count"] = entry.get("count", 0) + 1
+            _save_usage(self._usage)
 
     def _mark_exhausted_key(self, key: str):
         kid = self._key_id(key)
-        entry = self._usage.setdefault(kid, {"count": 0, "exhausted": False})
-        entry["exhausted"] = True
-        _save_usage(self._usage)
+        with _USAGE_LOCK:
+            self._usage = _load_usage()
+            entry = self._usage.setdefault(kid, {"count": 0, "exhausted": False})
+            entry["exhausted"] = True
+            _save_usage(self._usage)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -163,28 +179,51 @@ class ApiKeyPool:
 
     def all_usage(self) -> list[dict]:
         """Return a list of status dicts for all keys (for the UI)."""
+        return self._usage_rows(self._keys, self._usage, self._index)
+
+    @classmethod
+    def usage_snapshot(cls) -> list[dict]:
+        """Return persisted status even if every configured key is exhausted."""
+        keys = cls._discover_keys()
+        usage = _load_usage()
+        active_index = next(
+            (
+                i for i, key in enumerate(keys)
+                if not usage.get(f"key_{key[-6:]}", {}).get("exhausted", False)
+                and usage.get(f"key_{key[-6:]}", {}).get("count", 0) < DAILY_LIMIT
+            ),
+            None,
+        )
+        return cls._usage_rows(keys, usage, active_index)
+
+    @staticmethod
+    def _usage_rows(keys: list[str], usage: dict, active_index: int | None) -> list[dict]:
         result = []
-        for i, key in enumerate(self._keys):
-            u = self.usage_for(key)
+        for i, key in enumerate(keys):
+            u = usage.get(f"key_{key[-6:]}", {"count": 0, "exhausted": False})
             result.append({
                 "index":     i + 1,
                 "suffix":    f"…{key[-6:]}",
                 "count":     u.get("count", 0),
-                "exhausted": self._is_exhausted(key),
-                "active":    i == self._index,
+                "exhausted": u.get("exhausted", False) or u.get("count", 0) >= DAILY_LIMIT,
+                "active":    i == active_index,
             })
         return result
 
-    def record_success(self):
-        """Call after each successful API call to track usage."""
-        self._increment(self.current_key())
+    def record_request(self, key: str | None = None):
+        """Persist one Gemini request, including requests that return a quota error."""
+        self._increment(key or self.current_key())
 
-    def mark_exhausted(self):
+    def record_success(self):
+        """Backward-compatible alias for callers that only tracked successes."""
+        self.record_request()
+
+    def mark_exhausted(self, key: str | None = None):
         """
         Mark the current key as daily-exhausted, then rotate to the next key.
         Raises AllKeysExhaustedException if none remain.
         """
-        key = self.current_key()
+        key = key or self.current_key()
         self._mark_exhausted_key(key)
         logger.warning("Key %s exhausted. Rotating…", self.current_key_label())
         self.rotate()
