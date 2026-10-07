@@ -8,10 +8,18 @@ env/
 *.eggs/
 *.egg-info/
 
-# Environment files
+# Environment and secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.keystore
+*.jks
 
 # IDEs and Editors
 .idea/
@@ -19,6 +27,8 @@ env/
 *.swp
 *.swo
 .DS_Store
+.codex/
+.kilo/
 
 # Android & Gradle
 .gradle/
@@ -28,22 +38,25 @@ build/
 *.iml
 local.properties
 
-# Application Data & Database
-data/tracker.db
-data/key_usage.json
-data/processed_files.json
-data/logs/
+# Application Data & Databases (never commit personal DB or runtime data)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+data/*
+!data/.gitkeep
 
-# Custom Tools / Scratch
-.kilo/
-
-# Invoices & Images (uploaded receipts — never commit)
+# Invoices & Images (uploaded receipts & PDFs — never commit)
 invoice/
 *.jpg
 *.jpeg
 *.png
 *.gif
 *.webp
+*.pdf
 # ...but keep app source image assets tracked (Android launcher icon, web images)
 !android-app/**/*.png
 !android-app/**/*.jpg
@@ -57,6 +70,7 @@ invoice/
 !web/**/*.webp
 
 # Web frontend build artifacts (deps + build output)
+node_modules/
 web/node_modules/
 web/dist/
 web/.vite/

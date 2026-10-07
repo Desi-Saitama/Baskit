@@ -114,7 +114,7 @@ We implement a **Dual Reconciled Spending Forecaster**:
 
 ### 3. Proposed Changes by Component
 
-#### Backend (`/home/desi-saitama/Desktop/Inovice tracking app/`)
+#### Backend (`./`)
 
 ##### [MODIFY] `pyproject.toml`
 - Add `"scikit-learn>=1.4.0"` to `dependencies`.
@@ -135,7 +135,7 @@ Add additive REST endpoints:
 
 ---
 
-#### Frontend (`/home/desi-saitama/Desktop/Inovice tracking app/web/`)
+#### Frontend (`web/`)
 
 ##### [MODIFY] `web/src/lib/api.ts`
 - Add TypeScript interfaces: `PredictionSummary`, `PredictedItem`, `ModelFeatureWeights`, `RetrainResult`.

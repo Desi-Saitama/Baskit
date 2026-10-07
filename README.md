@@ -1,88 +1,220 @@
-# 🛒 Kharcha Tracker
+# 🧺 Baskit (Kharcha Tracker)
 
-> A private, self-hosted expense tracker for Indian delivery apps — Zepto, Blinkit, Instamart, BigBasket, JioMart, Swiggy, and Zomato.
+<div align="center">
 
-A **React + FastAPI** web app and a **Jetpack Compose** Android companion, all sharing a single SQLite database through the FastAPI REST API. Warm amber/orange themed.
+**Intelligent, private, self-hosted expense tracker and receipt parser for Indian delivery apps.**
 
-## Features
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite)](https://vitejs.dev)
+[![Android](https://img.shields.io/badge/Android-Jetpack%20Compose-3DDC84?style=flat-square&logo=android)](https://developer.android.com/jetpack/compose)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)](https://python.org)
+[![Gemini](https://img.shields.io/badge/Gemini-Vision%20OCR-8E75B2?style=flat-square&logo=google)](https://aistudio.google.com)
 
-- **Upload screenshots or PDF invoices** from all 7 apps
-- **AI parsing with Gemini** — automatically extracts items, prices, brands, quantities using the `google-genai` SDK
-- **Rotating API Key Pool** — configure up to 6 Gemini API keys to automatically rotate when a key hits the 20 requests/day free-tier limit
-- **Fuzzy Item Normalisation** — auto-detect near-duplicate item name variants (fuzzy similarity threshold 0.72) and resolve category conflicts
-- **Database Aliasing** — merge duplicate items and persist canonical mappings in the SQLite DB to clean up your analytics without mutating original invoice data
-- **Comprehensive Analytics Dashboard** — KPI widgets, spending-over-time chart, app spend share, category breakdown, 30-day spend heatmap, item frequency/price-range table, and savings insights
-- **Review & Edit** before saving — review and modify AI-extracted line items
-- **History log** — searchable, filterable log of orders with inline expand and delete
-- **Single user, private** — password-protected (bcrypt + JWT), local SQLite database
-- **Export** — download your orders and items data as CSV
-- **Android app** — same data, mobile companion with share-to-upload from any invoice screenshot
+**Supported Quick-Commerce & Delivery Apps:**  
+⚡ **Zepto** • 🟡 **Blinkit** • 🟢 **Swiggy Instamart** • 🥬 **BigBasket** • 🔵 **JioMart** • 🍔 **Swiggy Food** • 🔴 **Zomato**
 
-## Quick Start
+</div>
 
-### 1. Get free Gemini API keys
-- Visit [aistudio.google.com](https://aistudio.google.com/app/apikey)
-- Create one or more free API keys (Gemini 2.0 Flash)
+---
 
-### 2. Add your API keys
+## 📖 Overview
+
+Quick-commerce makes everyday ordering effortless, but tracking cumulative grocery and food spending across multiple apps is chaotic. Receipts are scattered across emails and in-app order histories with noisy, inconsistent naming (e.g. *"Amul Taaza Milk 500ml"* vs *"Amul Milk Pouch 500 ml"*).
+
+**Baskit** gives you complete visibility over your quick-commerce expenses with **zero manual data entry** and **100% data privacy**:
+
+1. **Snap or export receipts**: Upload screenshots or PDF invoices from any supported app.
+2. **AI-powered Vision OCR**: Google Gemini Vision parses and structures order metadata, item names, brands, categories, prices, discounts, and delivery fees.
+3. **Fuzzy Normalization**: Intelligent string clustering automatically groups noisy item name variants under canonical names without modifying raw receipt history.
+4. **Interactive Analytics**: Web dashboard and native Android app visualizing monthly burn, platform spend share, delivery fee leakage, and price histories.
+5. **Self-Hosted & Private**: Runs locally on your machine with SQLite. Your financial data stays exclusively on your hardware.
+
+---
+
+## ✨ Features
+
+- **📸 Multi-App Receipt Parser**: Native support for screenshots and PDF invoices from Zepto, Blinkit, Instamart, BigBasket, JioMart, Swiggy, and Zomato.
+- **🔄 Rotating Gemini API Key Pool**: Operates 100% on the Google AI Studio free tier. Configure up to 6 free keys; Baskit monitors daily usage (20 req/day per key) and rotates keys automatically to bypass rate limits.
+- **🪄 Fuzzy Item Clustering & Aliasing**: Auto-detects near-duplicate line items using string similarity (threshold $\ge 0.72$). Merge variations into a single canonical item, brand, and category with one click.
+- **📊 Comprehensive Analytics Dashboard**:
+  - Key financial metrics (Total Spend, Total Saved, Net Delivery Fees, Average Order Value).
+  - Spend over time with interactive daily/weekly trends.
+  - App spend distribution & category breakdowns.
+  - 30-day activity spend heatmap.
+  - Frequent items directory with unit price ranges and purchase cadence.
+- **📱 Native Android Companion**: Built with Kotlin and Jetpack Compose featuring a matching warm-amber design system and an Android Share Target (share invoice screenshots directly into Baskit).
+- **📁 Bulk Import**: Point Baskit to any folder containing past receipts. Features crash-resilient resume checkpoints and duplicate receipt prevention.
+- **🔒 Password-Protected & Private**: Single-user bcrypt authentication and JWT tokens. Everything is persisted in a local SQLite database (WAL mode).
+- **💾 CSV Export**: Export clean `orders.csv` and `items.csv` anytime for external analysis or backups.
+
+---
+
+## 🏗️ Architecture
+
+```
+┌────────────────────────┐      ┌────────────────────────┐
+│  React Web App (Vite)  │      │  Android Companion App │
+│  http://localhost:5173 │      │   (Jetpack Compose)    │
+└───────────┬────────────┘      └───────────┬────────────┘
+            │                               │
+            └───────────────┬───────────────┘
+                            ▼
+              ┌───────────────────────────┐
+              │   FastAPI REST API Server │
+              │   http://localhost:8000   │
+              └─────────────┬─────────────┘
+                            │
+            ┌───────────────┴───────────────┐
+            ▼                               ▼
+  ┌───────────────────┐           ┌───────────────────┐
+  │   Local SQLite    │           │ Gemini Key Pool   │
+  │ (data/tracker.db) │           │ (Vision OCR API)  │
+  └───────────────────┘           └───────────────────┘
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+- **Python 3.11+** (managed via [`uv`](https://github.com/astral-sh/uv) or standard `pip`)
+- **Node.js 18+** & `npm`
+- One or more free Google Gemini API keys from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+### 2. Clone the Repository
+```bash
+git clone git@github.com:Desi-Saitama/Baskit.git
+cd Baskit
+```
+
+### 3. Configure Environment Variables
+Copy the template and add your Gemini API key(s):
 ```bash
 cp .env.example .env
-# Edit .env and paste your keys:
-# GEMINI_API_KEY=AIza...
-# GEMINI_API_KEY1=AIza...
-# GEMINI_API_KEY2=AIza...
-# GEMINI_API_KEY3=AIza...
+```
+Open `.env` in your editor:
+```env
+# Free keys from https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=AIzaSy...
+GEMINI_API_KEY1=AIzaSy...   # Optional extra keys for rotation
+GEMINI_API_KEY2=AIzaSy...   # Optional
 ```
 
-### 3. Install web dependencies (first time)
+### 4. Install Dependencies
+
+#### Backend (`uv` recommended):
 ```bash
-cd web && npm install
+# Install uv if you don't have it:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install Python dependencies:
+uv sync
+```
+*(Or with pip: `pip install -e .`)*
+
+#### Frontend:
+```bash
+cd web
+npm install
+cd ..
 ```
 
-### 4. Run the app
+### 5. Launch the Application
+
+Run both the FastAPI backend and Vite frontend with a single command:
 ```bash
 uv run run_all.py
 ```
-This starts both servers:
-- **FastAPI API:** http://localhost:8000  (`/api/*`)
-- **React Web App:** http://localhost:5173  (proxies `/api` → :8000)
 
-Open http://localhost:5173 in your browser. On first launch you'll create your account (username + password) — a one-time setup.
+This starts:
+- 🌐 **Web Frontend**: [http://localhost:5173](http://localhost:5173)
+- ⚙️ **Backend API**: [http://localhost:8000](http://localhost:8000)
+- 📚 **Interactive Swagger API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### Run only the API server
+*On your first visit to http://localhost:5173, you will be prompted to create your admin account (username and password).*
+
+---
+
+## 📱 Android Companion App
+
+The Android app communicates with the same FastAPI server, allowing you to upload screenshots on the go or view your spending metrics.
+
+### Building the APK
 ```bash
-uv run uvicorn api_server:app --host 0.0.0.0 --port 8000 --reload
+cd android-app
+./gradlew assembleDebug
+```
+The output APK is located at:
+```
+android-app/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Android companion app
+### Installing on Device
+1. Enable **USB Debugging** on your Android device.
+2. Run:
+   ```bash
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   ```
+3. In the Android app Settings, enter your backend server URL (e.g., `http://192.168.1.X:8000` for your local network, or `http://10.0.2.2:8000` when running inside the Android Emulator).
 
-Build an installable debug APK:
-```bash
-cd android-app && ./gradlew assembleDebug
+---
+
+## 📂 Project Structure
+
 ```
-Output: `app/build/outputs/apk/debug/app-debug.apk`. Install over USB with `adb install -r` or copy to your phone and tap to install. The app authenticates against the same FastAPI server.
-
-## Project Structure
-
+.
+├── api_server.py            # FastAPI REST backend (auth, orders, stats, cleanup, settings)
+├── database.py              # SQLite persistence layer (WAL mode, parameterized SQL)
+├── parser.py                # Gemini Vision OCR parser & receipt extraction logic
+├── key_pool.py              # Rotating Gemini API key pool manager with daily quota tracking
+├── normalizer.py            # Fuzzy item clustering and canonical alias mappings
+├── run_all.py               # Process manager launching FastAPI + Vite concurrently
+├── pyproject.toml           # Python dependencies and project configuration
+├── .env.example             # Template for API keys
+│
+├── web/                     # React + Vite frontend
+│   ├── src/
+│   │   ├── components/      # UI cards, header, sidebar, charts
+│   │   ├── lib/api.ts       # Typed API client with JWT bearer auth
+│   │   ├── pages/           # Dashboard, Upload, BulkImport, AppsItems, History, Cleanup, Settings
+│   │   └── styles/          # Tailwind CSS & warm amber design tokens
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── android-app/             # Native Android companion app
+│   ├── app/src/main/
+│   │   ├── java/com/kharchatracker/
+│   │   │   ├── data/        # Retrofit API client, models & offline cache
+│   │   │   └── ui/          # Jetpack Compose screens & navigation
+│   │   └── res/             # Launcher icons & resources
+│   └── build.gradle.kts
+│
+└── data/                    # Local storage (git-ignored)
+    ├── tracker.db           # SQLite database (auto-created on startup)
+    └── key_usage.json       # Daily API key quota tracker (auto-created)
 ```
-├── api_server.py        # FastAPI REST server (Android + Web endpoints)
-├── database.py          # SQLite persistence layer (WAL mode, direct SQL)
-├── parser.py            # Gemini Vision OCR parser
-├── key_pool.py          # Rotating API key pool with daily usage tracking
-├── normalizer.py        # Fuzzy clustering and alias mapping logic
-├── run_all.py           # Orchestrates FastAPI + Vite dev servers
-├── web/                 # React + Vite + Tailwind + Recharts frontend
-│   └── src/
-│       ├── lib/api.ts   # API client (fetch + JWT)
-│       └── pages/       # Dashboard, Apps&Items, Savings, Upload, BulkImport, Cleanup, Settings, Login
-├── android-app/         # Jetpack Compose companion app (warm amber theme)
-├── data/
-│   ├── tracker.db       # SQLite database (auto-created)
-│   └── key_usage.json   # Tracks daily API key usages (auto-created)
-├── pyproject.toml       # uv project + Python dependencies
-└── .env                 # Your secrets (not committed)
+
+---
+
+## 🛡️ Security & Privacy Notice
+
+- **No Remote Telemetry**: Baskit does not send your receipt contents or expense data to any third-party server besides Google Gemini Vision for OCR parsing.
+- **Zero Committed Secrets**: `.env`, databases (`*.db`), cached logs, and uploaded receipts are explicitly ignored via `.gitignore`.
+- **Local Authentication**: User passwords are encrypted with bcrypt before being stored in SQLite. Sessions are protected via signed JWT tokens.
+
+---
+
+## 🗄️ Backup & Data Management
+
+Your entire expense history is stored in a single SQLite database file:
 ```
+data/tracker.db
+```
+To back up your data, simply copy this file or download a CSV export from **Settings → CSV Exporter** in the web dashboard.
 
-## Database backup
+---
 
-Your data lives in `data/tracker.db`. Just copy this file to back it up. You can also export CSVs from the web app's **Settings → CSV exporter**.
+## ⚖️ Disclaimer
+
+Baskit is an independent, open-source personal finance tool. It is not affiliated with, endorsed by, or associated with Zepto, Blinkit, Swiggy, Zomato, BigBasket, JioMart, or Google. All trademarks, service marks, and company names are the property of their respective owners.
